@@ -25,7 +25,7 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 		super(uname); // set title for frame
 		this.uname = uname;
 		client = new Socket(servername, 9999);
-		br = new BufferedReader(new InputStreamReader(client.getInputStream()));
+		br = new BufferedReader(new InputStreamReader(client.getInputStream(),Charset.forName("UTF-8")));
 		pw = new OutputStreamWriter(client.getOutputStream(), Charset.forName("UTF-8"));
 		pw.write(uname+"\n"); // send name to server
 		pw.flush();

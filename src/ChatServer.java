@@ -77,8 +77,7 @@ public class ChatServer {
 
 		public HandleClient(Socket client) throws Exception {
 			// get input and output streams
-			input = new BufferedReader(new InputStreamReader(
-					client.getInputStream())); 
+			input = new BufferedReader(new InputStreamReader(client.getInputStream(),Charset.forName("UTF-8"))); 
 			output = new OutputStreamWriter(client.getOutputStream(),Charset.forName("UTF-8"));
 			// read name
 			name = input.readLine();
