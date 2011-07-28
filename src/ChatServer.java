@@ -1,10 +1,17 @@
 // Chat Server runs at port no. 9999
-import java.io.*;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.logging.Logger;
-import java.net.*;
 import static java.lang.System.out;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.Charset;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Vector;
+import java.util.logging.Logger;
 
 public class ChatServer {
 	Vector<String> users = new Vector<String>();
@@ -39,12 +46,12 @@ public class ChatServer {
 	}
 
 
-	public void broadcast(String message){
+	public void broadcast(String message) throws IOException{
 		for (HandleClient c : clients)
 			c.sendMessage(message);
 	}
 	
-	public void broadcast(String user, String message) {
+	public void broadcast(String user, String message) throws IOException {
 		// send message to all connected users
 		String outputText = "["+sdf.format(Calendar.getInstance().getTime())+"] "+user + ": " + message;
 		for (HandleClient c : clients)
@@ -54,21 +61,25 @@ public class ChatServer {
 	
 	class ShutdownThread extends Thread {
 		public void run(){
-			broadcast("EXIT");
+			try {
+				broadcast("EXIT");
+			} catch (IOException e) {
+				log.info(e.getMessage());
+			}
 		}
 	}
 
 	class HandleClient extends Thread {
 		String name = "";
 		BufferedReader input;
-		PrintWriter output;
+		OutputStreamWriter output;
 		boolean operator;
 
 		public HandleClient(Socket client) throws Exception {
 			// get input and output streams
 			input = new BufferedReader(new InputStreamReader(
-					client.getInputStream()));
-			output = new PrintWriter(client.getOutputStream(), true);
+					client.getInputStream())); 
+			output = new OutputStreamWriter(client.getOutputStream(),Charset.forName("UTF-8"));
 			// read name
 			name = input.readLine();
 			users.add(name); // add to vector
@@ -76,8 +87,9 @@ public class ChatServer {
 			start();
 		}
 
-		public void sendMessage(String msg) {
-			output.println(msg);
+		public void sendMessage(String msg) throws IOException {
+			output.write(msg+"\n");
+			output.flush();
 		}
 
 		public void run() {
@@ -87,10 +99,6 @@ public class ChatServer {
 					line = input.readLine();
 					if (line.equals("EXIT")) {
 						throw new Exception(name+" left chat room. ");
-//						clients.remove(this);
-//						users.remove(name);
-//						broadcast("", "<< "+name+" has left chat room. Total of "+users.size()+" users online. >>");
-//						break;
 					}
 					else if (line.equals("U")){
 						StringBuilder str = new StringBuilder();
@@ -135,10 +143,15 @@ public class ChatServer {
 				log.info(ex.getMessage());
 			}
 			finally {
-				output.close();
-				clients.remove(this);
-				users.remove(name);
-				broadcast("", "<< "+name+" has left chat room. Total of "+users.size()+" users online. >>");
+				try {
+					broadcast("", "<< "+name+" has left chat room. Total of "+users.size()+" users online. >>");
+					output.close();
+				} catch (IOException e) {
+					log.info(e.getMessage());
+				} finally{
+					clients.remove(this);
+					users.remove(name);					
+				}
 			}
 		} // end of run()
 	} // end of inner class

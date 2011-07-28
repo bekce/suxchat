@@ -1,6 +1,8 @@
 import java.io.*;
 import java.util.*;
 import java.net.*;
+import java.nio.charset.Charset;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -8,21 +10,25 @@ import java.awt.event.*;
 import static java.lang.System.out;
 
 public class ChatClient extends JFrame implements ActionListener, KeyListener {
+	private static final long serialVersionUID = 1L;
 	String uname;
-	PrintWriter pw;
+	OutputStreamWriter pw;
 	BufferedReader br;
 	JTextArea taMessages;
 	JTextField tfInput;
 	JButton btnSend, btnExit;
 	Socket client;
+	boolean activeWindow; 
+	static ChatClient instance;
 
 	public ChatClient(String uname, String servername) throws Exception {
 		super(uname); // set title for frame
 		this.uname = uname;
 		client = new Socket(servername, 9999);
 		br = new BufferedReader(new InputStreamReader(client.getInputStream()));
-		pw = new PrintWriter(client.getOutputStream(), true);
-		pw.println(uname); // send name to server
+		pw = new OutputStreamWriter(client.getOutputStream(), Charset.forName("UTF-8"));
+		pw.write(uname+"\n"); // send name to server
+		pw.flush();
 		buildInterface();
 		taMessages.append("Welcome to SUXCHAT. Type U for current users list.\n");
 		Runtime.getRuntime().addShutdownHook(new ShutdownThread());
@@ -65,8 +71,20 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 //				pw.println("EXIT");
 				System.exit(0);
 			}
+			@Override
+			public void windowDeactivated(WindowEvent arg0) {
+				activeWindow = false;
+				super.windowDeactivated(arg0);
+			}
+			@Override
+			public void windowActivated(WindowEvent e) {
+				activeWindow = true;
+				super.windowActivated(e);
+			}
+			
 		});
 		setVisible(true);
+		activeWindow = true;
 		tfInput.requestFocus();
 		pack();
 	}
@@ -78,8 +96,13 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 			System.exit(0);
 		} else if (evt.getSource() == btnSend) {
 			// send message to server
-			pw.println(tfInput.getText());
-			tfInput.setText("");
+			try {
+				pw.write(tfInput.getText()+"\n");
+				pw.flush();
+				tfInput.setText("");
+			} catch (IOException e) {
+				JOptionPane.showMessageDialog(instance, "Message send error. Try again. ");
+			}
 		}
 
 	}
@@ -103,7 +126,7 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 			name = "user_"+UUID.randomUUID().toString().substring(0,8);
 		
 		try {
-			new ChatClient(name, servername);
+			instance = new ChatClient(name, servername);
 		} catch (Exception ex) {
 			out.println("Error --> " + ex.getMessage());
 		}
@@ -117,11 +140,24 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 			try {
 				while (true) {
 					line = br.readLine();
+					if(!activeWindow){
+			            JDialog dialog = new JDialog(instance);
+			            dialog.setTitle("Alert");
+			            dialog.addWindowListener(new WindowAdapter() {
+			            	public void windowOpened(WindowEvent e) {
+			            		e.getWindow().dispose();
+			            		super.windowOpened(e);
+			            	}
+						});
+			            dialog.setModal(true);
+			            dialog.setVisible(true);
+					}
 					if(line.equals("EXIT")){
 						taMessages.append("Server dropped connection. ");
 						tfInput.setEnabled(false);
 						btnSend.setEnabled(false);
 						pw.close();
+						break;
 					}
 					else
 						taMessages.append(line + "\n");
@@ -133,9 +169,13 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 	
 	class ShutdownThread extends Thread{
 		public void run(){
-			pw.println("EXIT");
-			pw.flush();
-			pw.close();
+			try {
+				pw.write("EXIT");
+				pw.flush();
+				pw.close();				
+			} catch (IOException e) {
+				e.printStackTrace();
+			} 
 		}
 	}
 
