@@ -133,6 +133,29 @@ public class ChatServer {
 							sendMessage("User not found. ");
 						}
 					}
+					else if(line.startsWith("P ")){
+						boolean found = false;
+						String rest = line.substring(2);
+						System.out.println("Rest : " +rest);
+						
+						String msguser = rest.substring(0, rest.indexOf(' '));
+						
+						System.out.println("User Name : " + msguser);
+						for (String user:users){
+							if(msguser.equals(user)){
+								users.remove(user);
+								HandleClient cl =findClientByName(user); 
+								cl.sendMessage("<< Private message from " + this.name+ " >>: " +rest.substring(msguser.length()));
+								this.sendMessage("<< Private message to " + cl.name + " >>: " +    rest.substring(msguser.length()));
+								found = true;
+								break;
+							}
+						}
+						if(!found){
+							sendMessage("User not found. ");
+						}
+						
+					}
 					else
 						broadcast(name, line); // method of outer class - send
 											// messages to all
