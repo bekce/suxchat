@@ -25,6 +25,7 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 		pw.println(uname); // send name to server
 		buildInterface();
 		taMessages.append("Welcome to SUXCHAT. Type U for current users list.\n");
+		Runtime.getRuntime().addShutdownHook(new ShutdownThread());
 		new MessagesThread().start(); // create thread for listening for
 										// messages
 	}
@@ -61,7 +62,7 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 		this.addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent e) {
-				pw.println("EXIT");
+//				pw.println("EXIT");
 				System.exit(0);
 			}
 		});
@@ -72,8 +73,8 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 
 	public void actionPerformed(ActionEvent evt) {
 		if (evt.getSource() == btnExit) {
-			pw.println("EXIT"); // send end to server so that server know about
-								// the termination
+//			pw.println("EXIT"); // send end to server so that server know about
+//								// the termination
 			System.exit(0);
 		} else if (evt.getSource() == btnSend) {
 			// send message to server
@@ -85,14 +86,22 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 
 	public static void main(String... args) {
 
-		// take username from user
-		String name = JOptionPane.showInputDialog(null, "Enter your name :",
-				"Username", JOptionPane.PLAIN_MESSAGE);
-		if (name==null || name.equals(""))
-			name = "user_"+UUID.randomUUID().toString().substring(0,8);
-		String servername = "localhost";
+		String servername;
 		if(args.length>0)
 			servername = args[0];
+		else
+			servername = JOptionPane.showInputDialog(null, "Enter server address :",
+					"Servername", JOptionPane.PLAIN_MESSAGE);
+			
+		if(servername==null || servername.isEmpty())
+			servername = "localhost";
+		
+		String name = JOptionPane.showInputDialog(null, "Enter your name :",
+				"Username", JOptionPane.PLAIN_MESSAGE);
+		
+		if (name==null || name.equals(""))
+			name = "user_"+UUID.randomUUID().toString().substring(0,8);
+		
 		try {
 			new ChatClient(name, servername);
 		} catch (Exception ex) {
@@ -108,30 +117,38 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 			try {
 				while (true) {
 					line = br.readLine();
-					taMessages.append(line + "\n");
+					if(line.equals("EXIT")){
+						taMessages.append("Server dropped connection. ");
+						tfInput.setEnabled(false);
+						btnSend.setEnabled(false);
+						pw.close();
+					}
+					else
+						taMessages.append(line + "\n");
 				} // end of while
 			} catch (Exception ex) {
 			}
 		}
 	}
+	
+	class ShutdownThread extends Thread{
+		public void run(){
+			pw.println("EXIT");
+			pw.flush();
+			pw.close();
+		}
+	}
 
 	@Override
 	public void keyPressed(KeyEvent e) {
-		// TODO Auto-generated method stub
 		if (e.getKeyCode() == KeyEvent.VK_ENTER) {
 			btnSend.doClick();
 		}
 	}
 
 	@Override
-	public void keyReleased(KeyEvent e) {
-		// TODO Auto-generated method stub
-
-	}
+	public void keyReleased(KeyEvent e) {}
 
 	@Override
-	public void keyTyped(KeyEvent e) {
-		// TODO Auto-generated method stub
-
-	}
+	public void keyTyped(KeyEvent e) {}
 } // end of client
