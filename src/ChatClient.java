@@ -113,14 +113,14 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 		if(args.length>0)
 			servername = args[0];
 		else
-			servername = JOptionPane.showInputDialog(null, "Enter server address :",
-					"Servername", JOptionPane.PLAIN_MESSAGE);
+			servername = (String) JOptionPane.showInputDialog(null, "Enter server address:",
+					"Servername", JOptionPane.PLAIN_MESSAGE, null, null, "sux.servebeer.com");
 			
 		if(servername==null || servername.isEmpty())
-			servername = "localhost";
+			servername = "sux.servebeer.com";
 		
-		String name = JOptionPane.showInputDialog(null, "Enter your name :",
-				"Username", JOptionPane.PLAIN_MESSAGE);
+		String name = (String) JOptionPane.showInputDialog(null, "Enter your name :",
+				"Username", JOptionPane.PLAIN_MESSAGE,null,null,System.getProperty("user.name"));
 		
 		if (name==null || name.equals(""))
 			name = "user_"+UUID.randomUUID().toString().substring(0,8);
