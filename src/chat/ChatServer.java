@@ -1,6 +1,4 @@
-// Chat Server runs at port no. 9999
-import static java.lang.System.out;
-
+package chat;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -10,6 +8,10 @@ import java.net.Socket;
 import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Properties;
+import java.util.StringTokenizer;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.Vector;
 import java.util.logging.Logger;
 
@@ -18,18 +20,40 @@ public class ChatServer {
 	Vector<HandleClient> clients = new Vector<HandleClient>();
 	Logger log = Logger.getAnonymousLogger();
 	SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
+	
+	String confFileName = "server.properties";
+	boolean stealthMode, entrancePasswordEnabled, logsEnabled;
+	String entrancePassword, operatorPassword, serverMessage;
+	int port;
 
 	public static void main(String... args) throws Exception {
-		new ChatServer().process();
-	} // end of main
+		final ChatServer instance = new ChatServer();
+		instance.configure();
+		instance.process();
+	}
+	
+	public void configure() throws Exception{
+		log.info("Loading external configuration from "+confFileName+".");
+		Properties props = new Properties();
+		props.load(ChatClient.class.getResourceAsStream(confFileName));
+		stealthMode=Boolean.parseBoolean(props.getProperty("server.stealth"));
+		entrancePasswordEnabled=Boolean.parseBoolean(props.getProperty("server.entrance.password.enabled"));
+		logsEnabled=Boolean.parseBoolean(props.getProperty("server.logs.enabled"));
+		entrancePassword=props.getProperty("server.entrance.password");
+		operatorPassword=props.getProperty("server.operator.password");
+		serverMessage=props.getProperty("server.message");
+		port=Integer.parseInt(props.getProperty("server.port"));
+	}
 
 	public void process() throws Exception {
-		ServerSocket server = new ServerSocket(9999, 10);
+		ServerSocket server = new ServerSocket(port, 10);
 		Runtime.getRuntime().addShutdownHook(new ShutdownThread());
-		out.println("Server Started...");
+		new Timer().scheduleAtFixedRate(new KeepAliveTimer(), 300000, 300000);
+		log.info("ChatServer Started...");
 		while (true) {
 			Socket client = server.accept();
-			log.info("Client accepted. "+client.getInetAddress().toString());
+			client.setKeepAlive(true);
+			log.info("Client accepted from "+client.getInetAddress().getHostName());
 			HandleClient c = new HandleClient(client);
 			clients.add(c);
 			broadcast("", "<< "+c.name+" entered chat room. Total of "+users.size()+" users online. >>");
@@ -53,16 +77,28 @@ public class ChatServer {
 	
 	public void broadcast(String user, String message) throws IOException {
 		// send message to all connected users
-		String outputText = "["+sdf.format(Calendar.getInstance().getTime())+"] "+user + ": " + message;
 		for (HandleClient c : clients)
-			c.sendMessage(outputText);
-		System.out.println(outputText);
+			c.sendMessage(user + ": " + message,true);
+		System.out.println(user + ": " + message);
 	}
 	
 	class ShutdownThread extends Thread {
 		public void run(){
 			try {
+				System.out.println("Shutting down ChatServer..");
 				broadcast("EXIT");
+				Thread.sleep(1000);
+			} catch (Exception e) {
+				log.info(e.getMessage());
+			} 
+		}
+	}
+	
+	class KeepAliveTimer extends TimerTask{
+		public void run() {
+			try {
+				broadcast("KEEPALIVE");
+				//log.info("KEEPALIVE sent.");
 			} catch (IOException e) {
 				log.info(e.getMessage());
 			}
@@ -73,17 +109,25 @@ public class ChatServer {
 		String name = "";
 		BufferedReader input;
 		OutputStreamWriter output;
+		Socket clientSocket;
 		boolean operator;
 
-		public HandleClient(Socket client) throws Exception {
+		public HandleClient(Socket clientSocket) throws Exception {
+			this.clientSocket = clientSocket;
 			// get input and output streams
-			input = new BufferedReader(new InputStreamReader(client.getInputStream(),Charset.forName("UTF-8"))); 
-			output = new OutputStreamWriter(client.getOutputStream(),Charset.forName("UTF-8"));
+			input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(),Charset.forName("UTF-8"))); 
+			output = new OutputStreamWriter(clientSocket.getOutputStream(),Charset.forName("UTF-8"));
 			// read name
 			name = input.readLine();
 			users.add(name); // add to vector
 			operator = false;
 			start();
+		}
+		
+		public void sendMessage(String msg, boolean includeTimeStamp) throws IOException {
+			if(includeTimeStamp){
+				sendMessage("["+sdf.format(Calendar.getInstance().getTime())+"] "+msg);
+			}
 		}
 
 		public void sendMessage(String msg) throws IOException {
@@ -94,8 +138,13 @@ public class ChatServer {
 		public void run() {
 			String line;
 			try {
-				while (true) {
+				while (true) { 
 					line = input.readLine();
+					if(line.isEmpty()){
+						continue;
+					}
+					StringTokenizer tokenizer = new StringTokenizer(line);
+					String firstToken = tokenizer.nextToken();
 					if (line.equals("EXIT")) {
 						throw new Exception(name+" left chat room. ");
 					}
@@ -106,19 +155,21 @@ public class ChatServer {
 						}
 						sendMessage("Logged Users: " + str.toString());
 					}
-					else if(line.startsWith("AUTH ")){
-						if(line.endsWith("password")){
+					else if(firstToken.equals("AUTH")){
+						if(tokenizer.nextToken().equals(operatorPassword)){
 							operator = true;
 							sendMessage("You're now an operator.");							
 						}
 						else{
-							sendMessage("Wrong password. ");
+							sendMessage("Wrong operator password. ");
 						}
 					}
-					else if(line.startsWith("K ") && operator){
+					else if(firstToken.equals("K") && operator){
 						boolean found = false;
+						tokenizer.nextToken();
+						String token = tokenizer.nextToken();
 						for (String user:users){
-							if(line.endsWith(user)){
+							if(token.equals(user)){
 								users.remove(user);
 								HandleClient cl =findClientByName(user); 
 								cl.sendMessage("EXIT");
@@ -133,20 +184,27 @@ public class ChatServer {
 							sendMessage("User not found. ");
 						}
 					}
-					else if(line.startsWith("P ")){
+					else if(firstToken.equals("P")){
 						boolean found = false;
-						String rest = line.substring(2);
-						System.out.println("Rest : " +rest);
+						String msguser, rest;
+						if(tokenizer.hasMoreTokens())
+							msguser = tokenizer.nextToken();
+						else{
+							sendMessage("Private messaging: P <user> <msg>");
+							continue;
+						}
+						if(tokenizer.hasMoreTokens())
+							rest = tokenizer.nextToken("");
+						else{
+							sendMessage("Private messaging: P <user> <msg>");
+							continue;
+						}
 						
-						String msguser = rest.substring(0, rest.indexOf(' '));
-						
-						System.out.println("User Name : " + msguser);
 						for (String user:users){
 							if(msguser.equals(user)){
-								users.remove(user);
 								HandleClient cl =findClientByName(user); 
-								cl.sendMessage("<< Private message from " + this.name+ " >>: " +rest.substring(msguser.length()));
-								this.sendMessage("<< Private message to " + cl.name + " >>: " +    rest.substring(msguser.length()));
+								this.sendMessage("<< PM to " + cl.name + " >>: " + rest,true);
+								cl.sendMessage("<< PM from " + this.name+ " >>: " +rest,true);
 								found = true;
 								break;
 							}
@@ -154,7 +212,9 @@ public class ChatServer {
 						if(!found){
 							sendMessage("User not found. ");
 						}
-						
+					}
+					else if(line.equals("KEEPALIVE")){
+						//ignore
 					}
 					else
 						broadcast(name, line); // method of outer class - send
@@ -166,8 +226,8 @@ public class ChatServer {
 			}
 			finally {
 				try {
-					broadcast("", "<< "+name+" has left chat room. Total of "+users.size()+" users online. >>");
-					output.close();
+					broadcast("", "<< "+name+" has left chat room. Total of "+(users.size()-1)+" users online. >>");
+					clientSocket.close();
 				} catch (IOException e) {
 					log.info(e.getMessage());
 				} finally{
