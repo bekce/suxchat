@@ -54,9 +54,7 @@ public class ChatServer {
 			Socket client = server.accept();
 			client.setKeepAlive(true);
 			log.info("Client accepted from "+client.getInetAddress().getHostName());
-			HandleClient c = new HandleClient(client);
-			clients.add(c);
-			broadcast("", "<< "+c.name+" entered chat room. Total of "+users.size()+" users online. >>");
+			new HandleClient(client);
 		} // end of while
 	}
 	
@@ -114,14 +112,51 @@ public class ChatServer {
 
 		public HandleClient(Socket clientSocket) throws Exception {
 			this.clientSocket = clientSocket;
+			operator = false;
 			// get input and output streams
 			input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(),Charset.forName("UTF-8"))); 
 			output = new OutputStreamWriter(clientSocket.getOutputStream(),Charset.forName("UTF-8"));
 			// read name
 			name = input.readLine();
-			users.add(name); // add to vector
-			operator = false;
-			start();
+			if (users.contains(name)) {
+				sendMessage("There is already a user with your name. Please relog with a different name.");
+				sendMessage("EXIT");
+				return;
+			}
+			if (entrancePasswordEnabled) {
+				try{
+					sendMessage("This is a private server. Please enter entrance password to login.");
+					int retryCount = 2;
+					for (; retryCount >= 0; retryCount--) {
+						String pass = input.readLine();
+						if (!entrancePassword.equals(pass)) {
+							if (retryCount==0) {
+								sendMessage("Sorry you're out.");
+								sendMessage("EXIT");
+							}
+							else{
+								sendMessage("Wrong password. You have "+(retryCount) + (retryCount==1?" retry":" retries")+" remaining");								
+							}
+						}
+						else{
+							sendMessage("Password accepted.");
+							users.add(name); // add to vector
+							start();
+							clients.add(this);
+							broadcast("", "<< "+name+" entered chat room. Total of "+users.size()+" users online. >>");
+							break;
+						}
+					}
+				}catch (Exception e) {
+					//this client will be gc'ed.
+				}
+			}
+			else{
+				users.add(name); // add to vector				
+				start();
+				clients.add(this);
+				broadcast("", "<< "+name+" entered chat room. Total of "+users.size()+" users online. >>");
+			}
 		}
 		
 		public void sendMessage(String msg, boolean includeTimeStamp) throws IOException {
@@ -156,7 +191,10 @@ public class ChatServer {
 						sendMessage("Logged Users: " + str.toString());
 					}
 					else if(firstToken.equals("AUTH")){
-						if(tokenizer.nextToken().equals(operatorPassword)){
+						if (operator) {
+							sendMessage("You're already an operator.");
+						}
+						else if(tokenizer.nextToken().equals(operatorPassword)){
 							operator = true;
 							sendMessage("You're now an operator.");							
 						}
@@ -166,10 +204,18 @@ public class ChatServer {
 					}
 					else if(firstToken.equals("K") && operator){
 						boolean found = false;
-						tokenizer.nextToken();
+						if (!tokenizer.hasMoreTokens()) {
+							sendMessage("Kick user: K <user>");
+							continue;
+						}
 						String token = tokenizer.nextToken();
 						for (String user:users){
-							if(token.equals(user)){
+							if (token.equals(name)) {
+								sendMessage("You cannot kick yourself.");
+								found = true;
+								break;
+							}
+							else if(token.equals(user)){
 								users.remove(user);
 								HandleClient cl =findClientByName(user); 
 								cl.sendMessage("EXIT");
@@ -226,13 +272,13 @@ public class ChatServer {
 			}
 			finally {
 				try {
-					broadcast("", "<< "+name+" has left chat room. Total of "+(users.size()-1)+" users online. >>");
+					clients.remove(this);
+					users.remove(name);
+					broadcast("", "<< "+name+" has left chat room. Total of "+(users.size())+" users online. >>");
 					clientSocket.close();
 				} catch (IOException e) {
 					log.info(e.getMessage());
 				} finally{
-					clients.remove(this);
-					users.remove(name);					
 				}
 			}
 		} // end of run()
