@@ -30,3 +30,17 @@ I’ve developed a simple solution for our inside-company basic communication pr
 
 1.  [Download suxchat-client.jar](https://github.com/bekce/suxchat/raw/master/dist/suxchat-0.3.7-client.jar)
 2.  Run it by double-clicking on it or typing `java -jar suxchat-0.3.7-client.jar`.
+
+### Commands Reference
+
+##### Regular Commands
+
+- `message` send _message_ to everyone online
+- `U` view online users
+- `P user message` Send a private _message_ to _user_
+
+##### Special Commands
+
+- `AUTH password` authorize yourself as operator with _password_  
+    (Default password: 1122, configurable in `server.properties`)
+- `K user` (requires operator) kick _user_ from the server
