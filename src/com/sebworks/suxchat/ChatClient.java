@@ -76,7 +76,7 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 		if (serverAddress == null)
 			System.exit(0);
 
-		if (serverAddress.isEmpty())
+		if (serverAddress.length() == 0)
 			serverAddress = props.getProperty("client.default.server");
 		
 //		props.setProperty("client.default.server", serverAddress);
@@ -88,7 +88,7 @@ public class ChatClient extends JFrame implements ActionListener, KeyListener {
 		if (userName == null)
 			System.exit(0);
 		
-		if (userName.isEmpty())
+		if (userName.length() == 0)
 			userName = "user_" + UUID.randomUUID().toString().substring(0, 8);
 		userName = userName.replaceAll(" ", "_");
 

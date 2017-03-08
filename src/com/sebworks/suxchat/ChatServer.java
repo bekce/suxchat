@@ -196,7 +196,7 @@ public class ChatServer {
 			try {
 				while (true) { 
 					line = input.readLine();
-					if(line.isEmpty()){
+					if(line.length() == 0){
 						continue;
 					}
 					StringTokenizer tokenizer = new StringTokenizer(line);
